@@ -1,0 +1,6 @@
+scrape_configs:
+  - job_name: 'nestjs-backend'
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:3000']   # ton backend NestJS
+    metrics_path: '/metrics'         # endpoint des métriques Prometheus
