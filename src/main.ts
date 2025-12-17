@@ -4,13 +4,13 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // app.enableCors({
-  //   origin: ['https://petite-annonce.vercel.app/', 'http://localhost:4200'],
-  //   credentials: true,
-  // });
+  app.enableCors({
+    origin: ['https://petite-annonce.vercel.app/', 'http://localhost:4200'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
 
-  app.enableCors({ origin: true });
-
-  await app.listen(3000);
+  await app.listen(process.env.PORT || 3000);
 }
 bootstrap();
