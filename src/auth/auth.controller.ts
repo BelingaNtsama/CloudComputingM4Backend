@@ -9,6 +9,7 @@ export class AuthController {
 
   @Post('login')
   async login(@Body() loginDto: LoginDto): Promise<User | string> {
+    console.log('LOGIN REQUEST:', loginDto);
     const user = await this.authService.validateUser(
       loginDto.email,
       loginDto.password,
