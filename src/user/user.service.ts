@@ -44,4 +44,22 @@ export class UserService {
 
     return users;
   }
+
+  async findOne(id: number) {
+    const start = Date.now();
+    const user = await this.repo.findOne({ where: { id } });
+    const duration = Date.now() - start;
+    const status = user ? '200' : '404';
+
+    this.httpRequestsTotal.inc({
+      method: 'GET',
+      route: `/users/${id}`,
+      status,
+    });
+    this.httpRequestDuration.observe(
+      { method: 'GET', route: `/users/${id}` },
+      duration,
+    );
+    return user;
+  }
 }

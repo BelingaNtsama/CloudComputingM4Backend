@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '../user/entity';
+import { User } from 'src/user/entity';
 import { Counter, Histogram } from 'prom-client';
+import { JwtService } from '@nestjs/jwt';
+import { Response } from 'express';
+import { jwtConstants } from './constants';
 
 @Injectable()
 export class AuthService {
@@ -11,6 +14,7 @@ export class AuthService {
 
   constructor(
     @InjectRepository(User) private readonly userRepo: Repository<User>,
+    private readonly jwtService: JwtService,
   ) {
     this.authRequestsTotal = new Counter({
       name: 'auth_requests_total',
@@ -28,7 +32,10 @@ export class AuthService {
 
   async validateUser(email: string, password: string): Promise<User | null> {
     const start = Date.now();
-    const user = await this.userRepo.findOne({ where: { email } });
+    const user = await this.userRepo.findOne({
+      where: { email },
+      relations: ['announces'], // charger les annonces associées
+    });
     const duration = Date.now() - start;
 
     if (user && user.password === password) {
@@ -54,6 +61,30 @@ export class AuthService {
       duration,
     );
     return null;
+  }
+
+  async login(user: User, res: Response): Promise<void> {
+    const payload = { sub: user.id, email: user.email };
+    const token = await this.jwtService.signAsync(payload, {
+      secret: jwtConstants.secret,
+      expiresIn: '1h',
+    });
+
+    res.cookie('jwt', token, {
+      httpOnly: true,
+      secure: false, // ⚠️ mettre true en prod avec HTTPS
+      sameSite: 'strict',
+      maxAge: 3600000,
+    });
+
+    // Supprimer le mot de passe avant de renvoyer l'objet
+    const { password, ...userWithoutPassword } = user;
+
+    res.send({
+      message: 'Login successful',
+      user: userWithoutPassword,
+      announces: user.announces || [],
+    });
   }
 
   async registerUser(

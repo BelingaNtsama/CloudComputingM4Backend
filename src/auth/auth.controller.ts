@@ -1,23 +1,26 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
-import { User } from '../user/entity';
-import { LoginDto } from './authDto';
-import { RegisterDto } from './authDto';
+import { LoginDto, RegisterDto } from './authDto';
+import { User } from 'src/user/entity';
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() loginDto: LoginDto): Promise<User | string> {
-    console.log('LOGIN REQUEST:', loginDto);
+  async login(@Body() loginDto: LoginDto, @Res() res: Response) {
     const user = await this.authService.validateUser(
       loginDto.email,
       loginDto.password,
     );
-    if (user) {
-      return user;
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
-    return 'Invalid credentials';
+
+    // Génère le cookie et renvoie l’utilisateur + annonces
+    await this.authService.login(user, res);
   }
 
   @Post('register')
@@ -27,5 +30,11 @@ export class AuthController {
       registerDto.email,
       registerDto.password,
     );
+  }
+
+  @Post('logout')
+  async logout(@Res() res: Response) {
+    res.clearCookie('jwt');
+    return res.json({ message: 'Logout successful' });
   }
 }

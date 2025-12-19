@@ -3,6 +3,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PrometheusModule } from '@willsoto/nestjs-prometheus';
 import { User } from './user/entity';
 import { AuthModule } from './auth/auth.module';
+import { AnnouncesController } from './announces/announces.controller';
+import { AnnouncesModule } from './announces/announces.module';
+import { Announce } from './announces/entities/announce.entity';
 
 @Module({
   imports: [
@@ -10,7 +13,7 @@ import { AuthModule } from './auth/auth.module';
     TypeOrmModule.forRoot({
       type: 'sqlite',
       database: 'db.sqlite',
-      entities: [User],
+      entities: [User, Announce],
       synchronize: true, // crée les tables automatiquement
     }),
 
@@ -20,6 +23,9 @@ import { AuthModule } from './auth/auth.module';
     }),
 
     AuthModule,
+
+    AnnouncesModule,
   ],
+  controllers: [AnnouncesController],
 })
 export class AppModule {}
