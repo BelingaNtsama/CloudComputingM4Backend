@@ -6,6 +6,8 @@ import { AuthModule } from './auth/auth.module';
 import { AnnouncesController } from './announces/announces.controller';
 import { AnnouncesModule } from './announces/announces.module';
 import { Announce } from './announces/entities/announce.entity';
+import { ConfigModule } from '@nestjs/config';
+import { SupabaseModule } from './supabase/supabase.module';
 
 @Module({
   imports: [
@@ -16,6 +18,7 @@ import { Announce } from './announces/entities/announce.entity';
       entities: [User, Announce],
       synchronize: true, // crée les tables automatiquement
     }),
+    ConfigModule.forRoot({ isGlobal: true }), // dispo partout sans réimporter
 
     // Prometheus exposera /metrics
     PrometheusModule.register({
@@ -25,6 +28,8 @@ import { Announce } from './announces/entities/announce.entity';
     AuthModule,
 
     AnnouncesModule,
+
+    SupabaseModule,
   ],
   controllers: [AnnouncesController],
 })

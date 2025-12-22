@@ -8,119 +8,57 @@ import { Repository } from 'typeorm';
 import { Announce } from './entities/announce.entity';
 import { CreateAnnounceDto } from './dto/create-announce.dto';
 import { UpdateAnnounceDto } from './dto/update-announce.dto';
-import { Counter, Histogram } from 'prom-client';
+import { SupabaseService } from 'src/supabase/supabase.service';
 
 @Injectable()
 export class AnnouncesService {
-  private readonly announcesRequestsTotal: Counter<string>;
-  private readonly announcesRequestDuration: Histogram<string>;
-
   constructor(
     @InjectRepository(Announce)
     private readonly announceRepo: Repository<Announce>,
-  ) {
-    this.announcesRequestsTotal = new Counter({
-      name: 'announces_requests_total',
-      help: 'Nombre total de requêtes Announces',
-      labelNames: ['method', 'route', 'status'],
-    });
-
-    this.announcesRequestDuration = new Histogram({
-      name: 'announces_request_duration_ms',
-      help: 'Durée des requêtes Announces en ms',
-      labelNames: ['method', 'route'],
-      buckets: [50, 100, 200, 500, 1000],
-    });
-  }
+    private readonly supabaseService: SupabaseService,
+  ) {}
 
   async create(
     createAnnounceDto: CreateAnnounceDto,
     userId: number,
+    file?: Express.Multer.File,
   ): Promise<Announce> {
-    const start = Date.now();
-    try {
-      const imageUrls = createAnnounceDto.uploadedImages?.map((img) => img.url);
+    let imageUrl: string | null = null;
 
-      const announce = this.announceRepo.create({
-        ...createAnnounceDto,
-        uploadedImages: imageUrls,
-        userId, // plus simple que caster user
-      });
+    if (file) {
+      const supabase = this.supabaseService.getClient();
+      const fileName = `${userId}-${Date.now()}-${file.originalname}`;
+      const { error } = await supabase.storage
+        .from('cloud') // nom du bucket Supabase
+        .upload(fileName, file.buffer, {
+          contentType: file.mimetype,
+        });
 
-      const saved = await this.announceRepo.save(announce);
+      if (error) throw error;
 
-      this.announcesRequestsTotal.inc({
-        method: 'POST',
-        route: '/announces',
-        status: '201',
-      });
-      this.announcesRequestDuration.observe(
-        { method: 'POST', route: '/announces' },
-        Date.now() - start,
-      );
-
-      return saved;
-    } catch (err) {
-      this.announcesRequestsTotal.inc({
-        method: 'POST',
-        route: '/announces',
-        status: '500',
-      });
-      this.announcesRequestDuration.observe(
-        { method: 'POST', route: '/announces' },
-        Date.now() - start,
-      );
-      throw err;
+      const { data } = supabase.storage.from('cloud').getPublicUrl(fileName);
+      imageUrl = data.publicUrl;
     }
+
+    const announce = this.announceRepo.create({
+      ...createAnnounceDto,
+      uploadedImages: imageUrl ? [imageUrl] : [],
+      userId,
+    });
+
+    return await this.announceRepo.save(announce);
   }
 
   async findAll(): Promise<Announce[]> {
-    const start = Date.now();
-    const announces = await this.announceRepo.find({ relations: ['user'] });
-
-    this.announcesRequestsTotal.inc({
-      method: 'GET',
-      route: '/announces',
-      status: '200',
-    });
-    this.announcesRequestDuration.observe(
-      { method: 'GET', route: '/announces' },
-      Date.now() - start,
-    );
-
-    return announces;
+    return await this.announceRepo.find({ relations: ['user'] });
   }
 
   async findOne(id: number): Promise<Announce> {
-    const start = Date.now();
     const announce = await this.announceRepo.findOne({
       where: { id },
       relations: ['user'],
     });
-
-    if (!announce) {
-      this.announcesRequestsTotal.inc({
-        method: 'GET',
-        route: '/announces/:id',
-        status: '404',
-      });
-      this.announcesRequestDuration.observe(
-        { method: 'GET', route: '/announces/:id' },
-        Date.now() - start,
-      );
-      throw new NotFoundException(`Annonce #${id} introuvable`);
-    }
-
-    this.announcesRequestsTotal.inc({
-      method: 'GET',
-      route: '/announces/:id',
-      status: '200',
-    });
-    this.announcesRequestDuration.observe(
-      { method: 'GET', route: '/announces/:id' },
-      Date.now() - start,
-    );
-
+    if (!announce) throw new NotFoundException(`Annonce #${id} introuvable`);
     return announce;
   }
 
@@ -129,77 +67,24 @@ export class AnnouncesService {
     updateAnnounceDto: UpdateAnnounceDto,
     userId: number,
   ): Promise<Announce> {
-    const start = Date.now();
     const announce = await this.findOne(id);
-
     if (announce.userId !== userId) {
-      this.announcesRequestsTotal.inc({
-        method: 'PATCH',
-        route: '/announces/:id',
-        status: '403',
-      });
-      this.announcesRequestDuration.observe(
-        { method: 'PATCH', route: '/announces/:id' },
-        Date.now() - start,
-      );
       throw new ForbiddenException(
         'Vous ne pouvez modifier que vos propres annonces',
       );
     }
-
-    if (updateAnnounceDto.uploadedImages) {
-      updateAnnounceDto.uploadedImages = updateAnnounceDto.uploadedImages.map(
-        (img: any) => img.url,
-      ) as any;
-    }
-
     Object.assign(announce, updateAnnounceDto);
-    const updated = await this.announceRepo.save(announce);
-
-    this.announcesRequestsTotal.inc({
-      method: 'PATCH',
-      route: '/announces/:id',
-      status: '200',
-    });
-    this.announcesRequestDuration.observe(
-      { method: 'PATCH', route: '/announces/:id' },
-      Date.now() - start,
-    );
-
-    return updated;
+    return await this.announceRepo.save(announce);
   }
 
   async remove(id: number, userId: number): Promise<string> {
-    const start = Date.now();
     const announce = await this.findOne(id);
-
     if (announce.userId !== userId) {
-      this.announcesRequestsTotal.inc({
-        method: 'DELETE',
-        route: '/announces/:id',
-        status: '403',
-      });
-      this.announcesRequestDuration.observe(
-        { method: 'DELETE', route: '/announces/:id' },
-        Date.now() - start,
-      );
       throw new ForbiddenException(
         'Vous ne pouvez supprimer que vos propres annonces',
       );
     }
-
     await this.announceRepo.remove(announce);
-
-    this.announcesRequestsTotal.inc({
-      method: 'DELETE',
-      route: '/announces/:id',
-      status: '200',
-    });
-    this.announcesRequestDuration.observe(
-      { method: 'DELETE', route: '/announces/:id' },
-      Date.now() - start,
-    );
-
     return `Annonce #${id} supprimée avec succès`;
   }
 }
