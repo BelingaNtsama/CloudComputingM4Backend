@@ -10,6 +10,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromExtractors([
         (req) => {
           // Récupérer le token depuis le cookie
+          console.log('Request Cookies:', req?.cookies);
           return req?.cookies?.jwt || null;
         },
       ]),
